@@ -1,0 +1,4 @@
+-r base.txt
+django-extensions==3.2.3
+django-debug-toolbar==4.4.6
+django-silk==5.2.0

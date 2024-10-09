@@ -346,16 +346,16 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'whitenoise.runserver_nostatic',
     'corsheaders',
-
+    'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
+    'drf_yasg',
+    'django_extensions',
     # My apps
     'vlog',
     'post',
     'profile_app',
     'authentication',
-    'rest_framework',
-    'rest_framework_simplejwt.token_blacklist',
-    'drf_yasg'
-]
+    ]
 
 AUTH_USER_MODEL = "authentication.CustomUser"
 

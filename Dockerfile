@@ -1,15 +1,40 @@
-FROM python:3
+FROM python:3.11-slim
 
-ENV PYTHONUNBUFFERED=1
+# Metadata
+LABEL organization="Trend"
+LABEL description="Trend backend service"
 
-WORKDIR /code
+# Install system dependencies
+RUN apt-get update
+RUN apt-get install -y gettext
 
-COPY requirements.txt /code/
+# Install GDAL dependencies
+RUN apt-get install -y --no-install-recommends \
+    gdal-bin \
+    libgdal-dev \
+    python3-gdal
 
-RUN pip install -r requirements.txt
+# No need for byte code in the container.
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
-COPY . /code/
+# Create a directory for our workspace.
+RUN mkdir /workspace/
+WORKDIR /workspace/
 
-EXPOSE 8000
+COPY ./requirements /requirements
+RUN pip install --no-cache-dir -r /requirements/dev.txt \
+    && rm -rf /requirements
+RUN pip install --no-cache-dir --upgrade pip
 
-CMD [ "python3", "manage.py", "runserver", "0.0.0.0:8000" ]
+# Copy project source to the container.
+RUN mkdir ./trend-backend/
+COPY . ./trend-backend/
+
+# Use non-root user for safety.
+RUN adduser --disabled-password --gecos "" django
+RUN chown -R django:django /workspace/
+USER django
+
+# Change work directory to our project's directory.
+WORKDIR ./trend-backend/
