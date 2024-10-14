@@ -1,11 +1,24 @@
+from django.shortcuts import get_object_or_404
+
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
-from django.shortcuts import get_object_or_404
-from .models import Video, VlogComment, VlogLike,VlogReaction
-from .serializers import VideoSerializer, VlogCommentSerializer, VlogLikeSerializer,VlogReactionSerializer
+
+from .models import (
+    Video, 
+    VlogComment, 
+    VlogLike,
+    VlogReaction
+)
+from .serializers import (
+    VideoSerializer, 
+    VlogCommentSerializer,
+    VlogLikeSerializer,
+    VlogReactionSerializer
+)
+
 
 class VideoList(generics.ListCreateAPIView):
     queryset = Video.objects.all()
@@ -14,9 +27,13 @@ class VideoList(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         try:
-            serializer.save(author=self.request.user)
+            serializer.save(
+                author=self.request.user
+            )
         except ValidationError as ve:
-            raise ValidationError({'detail': ve.messages})
+            raise ValidationError(
+                {'detail': ve.messages}
+            )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -24,9 +41,16 @@ class VideoList(generics.ListCreateAPIView):
         try:
             self.perform_create(serializer)
         except ValidationError as ve:
-            return Response({'detail': ve.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'detail': ve.detail},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
 
 class VideoDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Video.objects.all()

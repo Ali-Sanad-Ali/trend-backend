@@ -1,19 +1,61 @@
+import tempfile
+from moviepy.editor import VideoFileClip
+from django.utils import timezone
 from rest_framework import serializers
-from .models import Video, VlogComment, VlogLike,VlogReaction
+
+from .models import (
+    Video, 
+    VlogComment, 
+    VlogLike,
+    VlogReaction,
+    validate_video_duration
+)
+
 
 class VideoSerializer(serializers.ModelSerializer):
-    author = serializers.ReadOnlyField(source='author.username')
+    # author = serializers.ReadOnlyField(source='author.username')
     like_count = serializers.ReadOnlyField()
     comment_count = serializers.ReadOnlyField()
 
     class Meta:
         model = Video
-        fields = ['id', 'author', 'title', 'description', 'video', 'duration', 'thumbnail', 'created_at', 'updated_at', 'like_count', 'comment_count']
+        fields = [
+            'id',
+            'author',
+            'title',
+            'description',
+            'video',
+            'duration',
+            'thumbnail',
+            'created_at',
+            'updated_at',
+            'like_count',
+            'comment_count',
+        ]
         read_only_fields = ['duration', 'thumbnail', 'created_at', 'updated_at']
+        extra_kwargs = {
+            "author": {"required": False},
+        }
+    
+    def validate_video(self, video):
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
+            # Write content to temp file based on source
+            temp_video.write(video.read())
+            temp_video_path = temp_video.name
 
+            with VideoFileClip(temp_video_path) as video:
+                # Calculate and validate duration
+                duration = timezone.timedelta(seconds=video.duration)
+                validate_video_duration(duration)    
+        return video
+
+    
 class VlogCommentSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.username')
-    video = serializers.PrimaryKeyRelatedField(queryset=Video.objects.all(), required=False)
+    video = serializers.PrimaryKeyRelatedField(
+        queryset=Video.objects.all(), 
+        required=False
+    )
 
     class Meta:
         model = VlogComment

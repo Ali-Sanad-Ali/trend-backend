@@ -35,7 +35,6 @@ def validate_video_duration(duration):
     """
     if duration > MAX_VIDEO_DURATION:
         raise ValidationError(f"Video duration should not exceed {MAX_VIDEO_DURATION.total_seconds()} seconds.")
-
 def generate_thumbnail(video_path, output_path, time=0.0):
     """
     Generate a thumbnail image from a video file.
