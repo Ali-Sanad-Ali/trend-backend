@@ -1,9 +1,7 @@
+#!/bin/bash
 echo "########################################"
 echo "########################################"
-echo "entrypoint.sh"
+echo "celerydefault.sh"
 echo "########################################"
 echo "########################################"
-python manage.py makemigrations
-python manage.py migrate
-echo "########################################"
-echo "########################################"
+exec celery -A trend worker -l INFO --autoscale=2,1 --logfile=celery.log

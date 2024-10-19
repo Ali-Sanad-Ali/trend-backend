@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-
+from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
@@ -19,7 +19,6 @@ from .serializers import (
     VlogReactionSerializer
 )
 
-
 class VideoList(generics.ListCreateAPIView):
     queryset = Video.objects.all()
     serializer_class = VideoSerializer
@@ -30,10 +29,12 @@ class VideoList(generics.ListCreateAPIView):
             serializer.save(
                 author=self.request.user
             )
+            
         except ValidationError as ve:
             raise ValidationError(
                 {'detail': ve.messages}
             )
+
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

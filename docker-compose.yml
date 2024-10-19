@@ -17,7 +17,7 @@ services:
     depends_on:
       postgres-db:
         condition: service_healthy
-
+    
   postgres-db:
     container_name: trend-backend-postgres-db
     image: postgis/postgis:14-3.4
@@ -41,6 +41,45 @@ services:
       timeout: 5s
       retries: 20
       start_period: 10s
+  
+  redis:
+    container_name: trend-backend-redis
+    image: redis:7.2.4-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    restart: on-failure
+
+  celery:
+    container_name: trend-backend-celery
+    image: "trend-backend/web"
+    build:
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/workspace/trend-backend/
+    command: celery -A trend worker -l info --logfile=celery.log
+    env_file:
+      - .env
+    restart: on-failure
+    depends_on:
+      redis:
+        condition: service_started
+      postgres-db:
+        condition: service_healthy
+    
+    
+  celery-beat:
+    container_name: trend-backend-celery-beat
+    build:
+      dockerfile: Dockerfile
+    command: celery -A trend beat -l info --logfile=celery_beat.log
+    volumes:
+      - ./:/workspace/trend-backend/
+    env_file:
+      - .env
+    depends_on:
+      - web
+      - redis
+    restart: on-failure
+    
 
 volumes:
   postgres-data:

@@ -1,19 +1,15 @@
-import tempfile
-from moviepy.editor import VideoFileClip
-from django.utils import timezone
 from rest_framework import serializers
 
-from .models import (
+
+from vlog.models import (
     Video, 
     VlogComment, 
     VlogLike,
     VlogReaction,
-    validate_video_duration
 )
 
 
 class VideoSerializer(serializers.ModelSerializer):
-    # author = serializers.ReadOnlyField(source='author.username')
     like_count = serializers.ReadOnlyField()
     comment_count = serializers.ReadOnlyField()
 
@@ -36,19 +32,6 @@ class VideoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "author": {"required": False},
         }
-    
-    def validate_video(self, video):
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
-            # Write content to temp file based on source
-            temp_video.write(video.read())
-            temp_video_path = temp_video.name
-
-            with VideoFileClip(temp_video_path) as video:
-                # Calculate and validate duration
-                duration = timezone.timedelta(seconds=video.duration)
-                validate_video_duration(duration)    
-        return video
-
     
 class VlogCommentSerializer(serializers.ModelSerializer):
     user = serializers.ReadOnlyField(source='user.username')

@@ -1,64 +1,47 @@
 import os
 import tempfile
-import requests
+
 from django.conf import settings
-from django.core.validators import FileExtensionValidator
-from django.db import models
-from django.utils import timezone
+from django.db import models, transaction
 from django.core.exceptions import ValidationError
-from django.core.files import File
-from PIL import Image
+from django.core.validators import FileExtensionValidator
+from django.core.files.uploadedfile import InMemoryUploadedFile
+
 from moviepy.editor import VideoFileClip
 import logging
 
 from authentication.models import CustomUser  # Assuming this is your user model
 
 # Constants
-MAX_VIDEO_SIZE = 200 * 1024 * 1024  # 200 MB
-MAX_VIDEO_DURATION = timezone.timedelta(seconds=15)
+MAX_VIDEO_SIZE = settings.MAX_VIDEO_SIZE
+MAX_VIDEO_DURATION = settings.MAX_VIDEO_DURATION
 
 # Logger setup
 logger = logging.getLogger(__name__)
 
 def validate_video_size(file):
-    """
-    Validate the size of the uploaded video file.
-    Raises ValidationError if the file size exceeds MAX_VIDEO_SIZE.
-    """
     if file.size > MAX_VIDEO_SIZE:
-        raise ValidationError(f"File size should not exceed {MAX_VIDEO_SIZE / (1024 * 1024)} MB.")
+        raise ValidationError(f"Video file size should not exceed {MAX_VIDEO_SIZE / (1024 * 1024)} MB.")
 
-def validate_video_duration(duration):
-    """
-    Validate the duration of the uploaded video.
-    Raises ValidationError if the duration exceeds MAX_VIDEO_DURATION.
-    """
-    if duration > MAX_VIDEO_DURATION:
-        raise ValidationError(f"Video duration should not exceed {MAX_VIDEO_DURATION.total_seconds()} seconds.")
-def generate_thumbnail(video_path, output_path, time=0.0):
-    """
-    Generate a thumbnail image from a video file.
-
-    Args:
-    video_path (str): Path to the video file.
-    output_path (str): Path where the thumbnail should be saved.
-    time (float): Time in seconds at which to capture the thumbnail. Defaults to 0.0 (start of video).
-
-    Returns:
-    bool: True if thumbnail was generated successfully, False otherwise.
-    """
-    try:
-        with VideoFileClip(video_path) as video:
-            # Capture frame at specified time
-            frame = video.get_frame(time)
-
-            # Convert frame to PIL Image and save
-            image = Image.fromarray(frame)
-            image.save(output_path, format='JPEG')
-        return True
-    except Exception as e:
-        logger.error(f"Error generating thumbnail: {str(e)}")
-        return False
+def validate_video_duration(file):
+    if isinstance(file, InMemoryUploadedFile):
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            for chunk in file.chunks():
+                temp_file.write(chunk)
+            temp_video_path = temp_file.name
+    else:
+        temp_video_path = file.temporary_file_path()  # This works for regular uploaded files
+    
+    # Now you can use the temp_video_path with VideoFileClip
+    with VideoFileClip(temp_video_path) as video:
+        duration = video.duration
+        if duration > MAX_VIDEO_DURATION:  # Define your MAX_DURATION
+            raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
+    # Clean up
+    if isinstance(file, InMemoryUploadedFile):
+        # Remove the temporary file after processing
+        os.remove(temp_video_path)
 
 class Video(models.Model):
     author = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
@@ -70,7 +53,8 @@ class Video(models.Model):
         upload_to='vlogs/',
         validators=[
             FileExtensionValidator(allowed_extensions=['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp']),
-            validate_video_size
+            validate_video_size,
+            validate_video_duration
         ]
     )
     duration = models.DurationField(null=True, blank=True)
@@ -79,48 +63,14 @@ class Video(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        """
-        Custom save method to process the video file, calculate duration, and generate thumbnail.
-        """
-        is_new = self.pk is None
-
-        # Process video file
-        #RECOMMEDATION :Use Redis for caching and Celery for asynchronous video processing to enhance scalability and performance.
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
-            # Download video file if it's stored remotely (e.g., S3)
-            if 'http' in self.video.url:
-                temp_video.write(requests.get(self.video.url).content)
-            else:
-                temp_video.write(self.video.read())
-            temp_video_path = temp_video.name
-
-        thumbnail_path = None
-        try:
-            with VideoFileClip(temp_video_path) as video:
-                # Calculate and validate duration
-                duration = timezone.timedelta(seconds=video.duration)
-                validate_video_duration(duration)
-
-                # Generate and save thumbnail IN THE FIRST SECOND OF THE VIDEO
-                thumbnail_path = os.path.join(settings.MEDIA_ROOT, 'video_thumbnails', f'{self.pk}_thumb.jpg')
-                if generate_thumbnail(temp_video_path, thumbnail_path, time=1.0):
-                    with open(thumbnail_path, 'rb') as thumb_file:
-                        self.thumbnail.save(f'{self.pk}_thumb.jpg', File(thumb_file), save=False)
-
-                # Set duration and save changes
-                self.duration = duration
-                super().save(*args, **kwargs)
-
-        except ValidationError as ve:
-            # Handle validation error gracefully
-            logger.error(f"Validation error: {ve.messages[0]}")
-            raise ve
-
-        finally:
-            # Clean up temporary files
-            os.remove(temp_video_path)
-            if thumbnail_path and os.path.exists(thumbnail_path):
-                os.remove(thumbnail_path)
+        created = self.pk is None
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if created:
+                from vlog.tasks import create_video_thumbnail
+                transaction.on_commit(
+                    lambda: create_video_thumbnail.delay(self.pk)
+                )
 
     @property
     def like_count(self):

@@ -3,6 +3,7 @@ FROM python:3.11-slim
 # Metadata
 LABEL organization="Trend"
 LABEL description="Trend backend service"
+LABEL environment="Development"
 
 # Install system dependencies
 RUN apt-get update
@@ -22,16 +23,20 @@ ENV PYTHONUNBUFFERED 1
 RUN mkdir /workspace/
 WORKDIR /workspace/
 
-COPY ./requirements /requirements
-RUN pip install --no-cache-dir -r /requirements/dev.txt \
-    && rm -rf /requirements
-RUN pip install --no-cache-dir --upgrade pip
 
+
+# Install python requirements without storing wheels.
+RUN mkdir ./requirements/
+COPY ./requirements/base.txt \
+     ./requirements/dev.txt  \
+     ./requirements/
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r ./requirements/dev.txt
 # Copy project source to the container.
 RUN mkdir ./trend-backend/
 COPY . ./trend-backend/
 
-# Use non-root user for safety.
+# Use non-root user for safety after permissions have been set.
 RUN adduser --disabled-password --gecos "" django
 RUN chown -R django:django /workspace/
 USER django

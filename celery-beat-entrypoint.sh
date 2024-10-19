@@ -1,9 +1,7 @@
+#!/bin/bash
 echo "########################################"
 echo "########################################"
-echo "entrypoint.sh"
+echo "celery-beat-entrypoint.sh"
 echo "########################################"
 echo "########################################"
-python manage.py makemigrations
-python manage.py migrate
-echo "########################################"
-echo "########################################"
+exec celery -A trend beat -l info --logfile=celery_beat.log
