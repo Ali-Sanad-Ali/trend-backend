@@ -25,36 +25,37 @@ def validate_video_size(file):
 
 def validate_video_duration(file):
     if isinstance(file, InMemoryUploadedFile):
-        # Create a temporary file
+        # Create a temporary file for in-memory uploaded files
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             for chunk in file.chunks():
                 temp_file.write(chunk)
             temp_video_path = temp_file.name
     else:
-        temp_video_path = file.temporary_file_path()  # This works for regular uploaded files
-    
+        # Use file.path for files stored in file-based backends
+        temp_video_path = file.path
+
     # Now you can use the temp_video_path with VideoFileClip
-    with VideoFileClip(temp_video_path) as video:
-        duration = video.duration
-        if duration > MAX_VIDEO_DURATION:  # Define your MAX_DURATION
-            raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
-    # Clean up
-    if isinstance(file, InMemoryUploadedFile):
-        # Remove the temporary file after processing
-        os.remove(temp_video_path)
+    try:
+        with VideoFileClip(temp_video_path) as video:
+            duration = video.duration
+            if duration > MAX_VIDEO_DURATION:  # Define your MAX_DURATION
+                raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
+    finally:
+        # Clean up the temporary file for in-memory uploads
+        if isinstance(file, InMemoryUploadedFile):
+            os.remove(temp_video_path)
 
 class Video(models.Model):
     author = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
 
-    #Configure the video field to store user uploads in a cloud storage service like S3 or Cloudinary for efficient and scalable media management in production environments.
+    # Configure the video field to store user uploads in a cloud storage service like S3 or Cloudinary for efficient and scalable media management in production environments.
     video = models.FileField(
         upload_to='vlogs/',
         validators=[
             FileExtensionValidator(allowed_extensions=['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp']),
-            validate_video_size,
-            validate_video_duration
+            validate_video_size
         ]
     )
     duration = models.DurationField(null=True, blank=True)
@@ -66,6 +67,16 @@ class Video(models.Model):
         created = self.pk is None
         with transaction.atomic():
             super().save(*args, **kwargs)
+
+            # Validate video duration after the file is saved
+            try:
+                with VideoFileClip(self.video.path) as video:
+                    duration = video.duration
+                    if duration > MAX_VIDEO_DURATION:
+                        raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
+            except OSError as e:
+                raise ValidationError(f"Unable to process video file: {e}")
+
             if created:
                 from vlog.tasks import create_video_thumbnail
                 transaction.on_commit(
@@ -108,9 +119,7 @@ class VlogLike(models.Model):
         unique_together = ('video', 'user')
 
     def __str__(self):
-        return f"{self.user.username} liked video {self.video.id}" 
-    
-
+        return f"{self.user.username} liked video {self.video.id}"
 
 class VlogReaction(models.Model):
     REACTION_CHOICES = [
