@@ -28,4 +28,9 @@ urlpatterns = [
 
     path('post/<int:pk>/toggle-reaction', ReactionToggleView.as_view(), name='toggle-reaction'),
     path('post/<int:pk>/reactions-list',  ReactionListView.as_view(), name='reactions-list'),
+    # In home/urls.py
+
+
+
+
 ]

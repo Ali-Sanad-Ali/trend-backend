@@ -32,7 +32,7 @@ SECRET_KEY = 'django-insecure-g5u*myt(vy)grwuiq=++5n#(44&y8a*%=vnc5^9^9ku4gu1nsc
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '13.58.69.214']
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [ip[:-1] + '1' for ip in ips] + ['127.0.0.1']
