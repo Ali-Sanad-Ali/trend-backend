@@ -19,25 +19,29 @@ from rest_framework.permissions import IsAuthenticated
 from authentication.models import Block, CustomUser
 
 
-# Create Poset view
+# Create Post view
 class CreatePost(generics.CreateAPIView):
     queryset = Post.objects.all()
     serializer_class = CreatePostSerializer
     permission_classes = [IsAuthenticated]
 
+    # need adjustment: Overriding `perform_create` may not be necessary if user assignment is handled in the serializer's `create` method.
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    # need adjustment: Overriding the `create` method is unnecessary unless you need custom response data.
+    # If you need additional fields in the response, consider including them in the serializer.
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         instance = serializer.instance
-        # instance = serializer.save()
-        # Prepare the response data
+
+        # need adjustment: Accessing `instance.image.url` can raise an error if `image` is None.
+        # Adjust to handle cases where `image` might not be provided.
         response_data = {
             "id": instance.id,
-            "image": instance.image.url,
+            "image": instance.image.url if instance.image else None,  # Adjusted to handle None case.
             "content": instance.content,
             "username": instance.user.username,
             "created_at": instance.created_at,

@@ -80,25 +80,27 @@ class HiddenPost(models.Model):
         return f"{self.user.username} hidden post {self.post.id}"
 
 
-
 class Reaction(models.Model):
     REACTION_CHOICES = [
         ('love', '❤️ Love'),
         ('like', '👍 Like'),
         ('haha', '😂 Haha'),
         ('wow', '😮 Wow'),
-        ('crying', '😭 crying'),
-        ('disgusting', '🤮 disgusting'),
-        # Add more or remove reactions as needed
+        ('crying', '😭 Crying'),
+        ('disgusting', '🤮 Disgusting'),
+        ('liar', '🤥 Liar'),
+        ('angry', '😡 Angry'),
     ]
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='reactions')
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='reactions')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='post_reactions')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_reactions')
     reaction_type = models.CharField(max_length=20, choices=REACTION_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('post', 'user', 'reaction_type')
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'user'], name='unique_reaction_per_user_per_post')
+        ]
 
     def __str__(self):
         return f"{self.user.username} reacted {self.get_reaction_type_display()} to post {self.post.id}"
@@ -106,19 +108,18 @@ class Reaction(models.Model):
     @classmethod
     def toggle_reaction(cls, post, user, reaction_type):
         """
-        Toggle a reaction. If the reaction exists, remove it. Otherwise, create it.
+        Toggle a reaction. If the same reaction exists, remove it.
+        Otherwise, update or create it.
         """
         try:
-            reaction = cls.objects.get(post=post, user=user, reaction_type=reaction_type)
-            reaction.delete()
-            return False
+            reaction = cls.objects.get(post=post, user=user)
+            if reaction.reaction_type == reaction_type:
+                reaction.delete()  # User unreacts
+                return False  # Reaction removed
+            else:
+                reaction.reaction_type = reaction_type  # User changes reaction
+                reaction.save()
+                return True  # Reaction updated
         except cls.DoesNotExist:
             cls.objects.create(post=post, user=user, reaction_type=reaction_type)
-            return True
-
-    @property
-    def reaction_count(self):
-        """
-        Property to count the total number of reactions for this post.
-        """
-        return Reaction.objects.filter(post=self.post).count()
+            return True  # Reaction created

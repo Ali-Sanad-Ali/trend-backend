@@ -12,6 +12,8 @@ from vlog.models import (
 class VideoSerializer(serializers.ModelSerializer):
     like_count = serializers.ReadOnlyField()
     comment_count = serializers.ReadOnlyField()
+    author = serializers.CharField(source='author.username', read_only=True)  # Fetch username instead of ID
+
 
     class Meta:
         model = Video
@@ -28,7 +30,7 @@ class VideoSerializer(serializers.ModelSerializer):
             'like_count',
             'comment_count',
         ]
-        read_only_fields = ['duration', 'thumbnail', 'created_at', 'updated_at']
+        read_only_fields = ['author','duration', 'thumbnail', 'created_at', 'updated_at']
         extra_kwargs = {
             "author": {"required": False},
         }

@@ -55,28 +55,6 @@ class ProfileViewList(generics.ListAPIView):
             queryset = Profile.objects.exclude(user__in=users_to_exclude)
         return queryset.order_by('-created_at')
 
-
-# class ProfileDetails(generics.RetrieveUpdateDestroyAPIView):
-#     """
-#     Retrieve, update or delete a profile instance.
-#     """
-#     queryset = Profile.objects.all()
-#     serializer_class = ProfileSerializer
-#     permission_classes = [IsAuthenticated]
-
-#     def get_queryset(self):
-#         """
-#         Filter out blocked profiles for authenticated users.
-#         """
-#         queryset = super().get_queryset()
-#         user = self.request.user
-#         if user.is_authenticated:
-#             blocked_subquery = Block.objects.filter(blocker=OuterRef('user'), blocked=user)
-#             queryset = queryset.annotate(is_blocked=Exists(blocked_subquery)).exclude(is_blocked=True)
-#         return queryset
-
-
-
 class ProfileDetails(generics.RetrieveUpdateAPIView):
     """
     Retrieve or update a profile instance. Deletion is not allowed because profiles are automatically 
@@ -103,32 +81,17 @@ class ProfileDetails(generics.RetrieveUpdateAPIView):
         return queryset
 
     def update(self, request, *args, **kwargs):
-        """
-        Only allow the profile owner to update the profile.
-        """
+      
         profile = self.get_object()
 
-        # Check if the authenticated user is the owner of the profile
         if request.user != profile.user:
             raise PermissionDenied("You do not have permission to update this profile.")
         
         return super().update(request, *args, **kwargs)
 
     def delete(self, request, *args, **kwargs):
-        """
-        Disallow deletion of the profile.
-        """
+        
         raise PermissionDenied("Profile deletion is not allowed.")
-
-
-
-# class UpdateProfileView(generics.UpdateAPIView):
-#     queryset = Profile.objects.all()
-#     serializer_class = ProfileSerializer
-#     permission_classes = [IsAuthenticated]
-
-#     def get_object(self):
-#         return self.request.user.profile
 
 
 class FollowViewList(generics.ListAPIView):
