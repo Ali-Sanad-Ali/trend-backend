@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from moviepy.editor import VideoFileClip
 import logging
+import requests
 
 from authentication.models import CustomUser  # Assuming this is your user model
 
@@ -62,19 +63,26 @@ class Video(models.Model):
     thumbnail = models.ImageField(upload_to='video_thumbnails/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
     def save(self, *args, **kwargs):
         created = self.pk is None
         with transaction.atomic():
             super().save(*args, **kwargs)
 
-            # Validate video duration after the file is saved
             try:
-                with VideoFileClip(self.video.path) as video:
-                    duration = video.duration
-                    if duration > MAX_VIDEO_DURATION:
-                        raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
-            except OSError as e:
+                # Download the video temporarily for processing
+                with tempfile.NamedTemporaryFile(delete=True, suffix='.mp4') as temp_file:
+                    response = requests.get(self.video.url, stream=True)
+                    if response.status_code == 200:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            temp_file.write(chunk)
+                        temp_file.flush()
+
+                        # Open and validate the video duration
+                        with VideoFileClip(temp_file.name) as video:
+                            duration = video.duration
+                            if duration > MAX_VIDEO_DURATION:
+                                raise ValidationError(f"Video duration exceeds the maximum limit of {MAX_VIDEO_DURATION} seconds.")
+            except Exception as e:
                 raise ValidationError(f"Unable to process video file: {e}")
 
             if created:
@@ -82,21 +90,6 @@ class Video(models.Model):
                 transaction.on_commit(
                     lambda: create_video_thumbnail.delay(self.pk)
                 )
-
-    @property
-    def like_count(self):
-        """
-        Returns the number of likes for this video.
-        """
-        return self.likes.count()
-
-    @property
-    def comment_count(self):
-        """
-        Returns the number of comments for this video.
-        """
-        return self.comments.count()
-
     def __str__(self):
         return self.title
 
